@@ -3,6 +3,7 @@ import json
 import logging
 import os
 import re
+import shutil
 import urllib
 import urlparse
 import zipfile
@@ -29,8 +30,9 @@ def get_env_var(env_var, default=_NOT_SET, convert_to_type=None, fail=True):
 
 
 class PluginDownloader(object):
-    DOWNLOAD_DEST = get_env_var(ENV_VAR_TEMP_DIR, default='/tmp/jpd')
-    OUT_ZIP_PATH = os.path.join(DOWNLOAD_DEST, 'out.zip')
+    TEMP_DIR = get_env_var(ENV_VAR_TEMP_DIR, default='/tmp/jpd')
+    DOWNLOAD_DEST = os.path.join(TEMP_DIR, 'jars')
+    OUT_ZIP_PATH = os.path.join(TEMP_DIR, 'out.zip')
     INDEX_JSON_NAME = 'index.json'
     ALLOWED_SCHEMES = ['http', 'https', 'ftp']
     JMETER_FORMATTER_SYMBOL = '%1$s'
@@ -89,7 +91,6 @@ class PluginDownloader(object):
 
     def _download_urls(self, urls):
         pb = progressbar.progressbar(xrange(len(urls.keys())), redirect_stdout=True)
-        pb.next()
 
         for url, filename in urls.iteritems():
             try:
@@ -100,16 +101,24 @@ class PluginDownloader(object):
                 raise
 
     def _make_zip(self, folder_path, zip_path):
+        logging.info("Creating zip at {}".format(zip_path))
         zipf = zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED)
         for root, dirs, files in os.walk(folder_path):
             for file in files:
                 zipf.write(os.path.join(root, file))
 
     def _write_modified_index(self, modified_index_obj, path):
+        logging.info("Writing {}".format(self.INDEX_JSON_NAME))
         with open(path, 'w') as f:
             f.write(json.dumps(modified_index_obj, indent=4))
 
     def run(self):
+        try:
+            os.makedirs(self.TEMP_DIR)
+        except OSError:
+            pass
+
+        shutil.rmtree(self.DOWNLOAD_DEST, ignore_errors=True)
         os.makedirs(self.DOWNLOAD_DEST)
 
         self._urls_to_download = {}
