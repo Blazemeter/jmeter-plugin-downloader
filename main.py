@@ -8,14 +8,14 @@ import urllib
 import urlparse
 import zipfile
 
+import click
 import progressbar
 import requests
 
-ENV_VAR_TEMP_DIR = 'TEMP_DIR'
-ENV_VAR_SOURCE_PLUGIN_URL = 'SOURCE_PLUGIN_URL'
-ENV_VAR_DEST_PLUGIN_URL = 'DEST_PLUGIN_URL'
-ENV_VAR_JMETER_VERSIONS_DOWNLOAD = 'JMETER_VERSIONS'
+DEFAULT_SOURCE_URL = 'https://jmeter-plugins.org/repo/'
+DEFAULT_JMETER_VERSIONS = '5.0,4.0,3.3'
 
+ENV_VAR_TEMP_DIR = 'TEMP_DIR'
 _NOT_SET = '$__NOT_SET__$'
 
 
@@ -37,11 +37,12 @@ class PluginDownloader(object):
     ALLOWED_SCHEMES = ['http', 'https', 'ftp']
     JMETER_FORMATTER_SYMBOL = '%1$s'
 
-    def __init__(self, source_url, dest_url, jmeter_versions):
+    def __init__(self, source_url, dest_url, jmeter_versions, dry_run):
         self._source_url = source_url
         self._dest_url = dest_url if dest_url.endswith('/') else dest_url + '/'
         self._jmeter_versions = jmeter_versions if isinstance(jmeter_versions, list) else [x.strip() for x in
                                                                                            jmeter_versions.split(',')]
+        self.dry_run = dry_run
 
         self._urls_to_download = {}  # <url>: <fname>
 
@@ -126,30 +127,35 @@ class PluginDownloader(object):
         dest_index = self._traverse(source_index)
 
         self._write_modified_index(dest_index, os.path.join(self.DOWNLOAD_DEST, self.INDEX_JSON_NAME))
-        self._download_urls(self._urls_to_download)
+        if not self.dry_run:
+            self._download_urls(self._urls_to_download)
         self._make_zip(self.DOWNLOAD_DEST, self.OUT_ZIP_PATH)
 
 
-def main():
-    logFormatter = logging.Formatter("%(asctime)s [%(threadName)s] [%(levelname)s]  %(message)s")
+@click.command()
+@click.option('--source-url', help="JMeter plugin source URL. Default: {}".format(DEFAULT_SOURCE_URL),
+              default=DEFAULT_SOURCE_URL)
+@click.option('--dest-url', help="JMeter plugin destination URL.", required=True)
+@click.option('--jmeter-versions', help="JMeter versions to support. Default: {}".format(DEFAULT_JMETER_VERSIONS),
+              default=DEFAULT_JMETER_VERSIONS)
+@click.option('--dry-run', help="Should create index.json only and zip it.", is_flag=True)
+def cli(source_url, dest_url, jmeter_versions, dry_run):
+    logFormatter = logging.Formatter("%(asctime)s [%(threadName)s] [%(levelname)s] - %(message)s")
     rootLogger = logging.getLogger()
     rootLogger.setLevel(logging.DEBUG)
     consoleHandler = logging.StreamHandler()
     consoleHandler.setFormatter(logFormatter)
     rootLogger.addHandler(consoleHandler)
 
-    source_url = get_env_var(ENV_VAR_SOURCE_PLUGIN_URL)
-    dest_url = get_env_var(ENV_VAR_DEST_PLUGIN_URL)
-    jmeter_versions = get_env_var(ENV_VAR_JMETER_VERSIONS_DOWNLOAD, '5.0,4.0,3.3')
-
     logging.info("Downloading from {}".format(source_url))
     logging.info("Replacing source url with {}".format(dest_url))
     logging.info("Supported JMeter versions are {}".format(jmeter_versions))
     logging.info("-" * 50)
 
-    downloader = PluginDownloader(source_url=source_url, dest_url=dest_url, jmeter_versions=jmeter_versions)
+    downloader = PluginDownloader(source_url=source_url, dest_url=dest_url, jmeter_versions=jmeter_versions,
+                                  dry_run=dry_run)
     downloader.run()
 
 
-if __name__ == "__main__":
-    main()
+if __name__ == '__main__':
+    cli(auto_envvar_prefix='JPD')

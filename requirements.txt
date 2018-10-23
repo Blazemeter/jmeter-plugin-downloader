@@ -1,2 +1,3 @@
 progressbar2==3.38.0
 requests==2.19.1
+Click==7.0
