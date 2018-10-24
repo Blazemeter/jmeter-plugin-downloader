@@ -2,7 +2,7 @@
 
 1. Install docker
 2. Clone repo
-3. Run `docker build -t jpd`
+3. Run `docker build . -t jpd`
 4. Run `docker run -v /tmp/jpd:/tmp/jpd jpd <cli args>`
 5. Get results from `/tmp/jpd/out.zip`
 
